@@ -25,7 +25,8 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-  platforms:
+  plugin:
+    platforms:
     ios: any
     android: any
 

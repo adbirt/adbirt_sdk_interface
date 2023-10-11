@@ -27,8 +27,8 @@ dev_dependencies:
 flutter:
   plugin:
     platforms:
-    ios: any
-    android: any
+      ios: any
+      android: any
 
   # To add assets to your package, add an assets section, like this:
   # assets:

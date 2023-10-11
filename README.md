@@ -11,7 +11,7 @@ and the Flutter guide for
 [developing packages and plugins](https://flutter.dev/developing-packages).
 -->
 
-TODO: Flutter SDK for adbirt
+Flutter SDK for adbirt
 
 ## Features
 

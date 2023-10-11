@@ -11,29 +11,65 @@ and the Flutter guide for
 [developing packages and plugins](https://flutter.dev/developing-packages).
 -->
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+TODO: Flutter SDK for adbirt
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- Initialize App: Initialize your application with an Adbirt API token.
+- Track User Events: Log custom events along with event parameters to the Adbirt platform.
+- Android Install Referrer: Automatically capture UTM source and medium values for Android installations.
+- iOS Tracking Authorization: Request and manage tracking authorization on iOS devices.
 
 ## Getting started
+You need the followig ->
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+flutter:
+  sdk: flutter
+android_play_install_referrer: ^0.3.0
+shared_preferences: ^2.2.2
+app_tracking_transparency: ^2.0.4
+http: ^1.1.0
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
-
-```dart
-const like = 'sample';
+Add the package to your pubspec.yaml file:
+```yaml
+dependencies:
+  adbirt_sdk_interface: ^0.0.1
 ```
 
-## Additional information
+Then run:
+```bash
+flutter pub get
+```
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+Here's a quick guide on how to use this package:
+
+- Initialization
+```dart
+import 'package:adbirt_sdk_interface/adbirt_sdk_interface.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize your app with the Adbirt API token
+  await AdbirtADKInterface.initializeApp('your_api_token');
+  
+  runApp(MyApp());
+}
+```
+
+- Event/Transaction tracking
+```dart
+// Log a custom event with event name and parameters
+AdbirtADKInterface.logEvent('apex:transaction', {
+  'user_id': '12345', 
+  'type': 'cash withdrawal' // can be anything
+  'amount': '10,000',
+});
+```
+
+
+## Additional information
+For more Information, visit [https://adbirt.com/contact](https://adbirt.com/contact) for more information about the Adbirt platform.
+

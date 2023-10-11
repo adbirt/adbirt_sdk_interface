@@ -127,11 +127,11 @@ abstract class AdbirtADKInterface {
 
   //
 
-  static Future<bool> _trackCurrentScreen(String screenName) async {
-    // TODO: implement this
+  // static Future<bool> _trackCurrentScreen(String screenName) async {
+  //   // TODO: implement this
 
-    return false;
-  }
+  //   return false;
+  // }
 
   static String _geterateUniqueIdentifyer() {
     int length = 20;

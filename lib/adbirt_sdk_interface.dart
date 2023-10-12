@@ -111,7 +111,10 @@ abstract class AdbirtADKInterface {
       debugPrint('Adbirt API token not set!!!');
     }
 
-    String jsonParameters = jsonEncode(parameters);
+    String jsonParameters = jsonEncode({
+      'event_name': eventName,
+      'fields': jsonEncode(parameters),
+    });
 
     String encodedPayload = Uri.encodeQueryComponent(jsonParameters);
 

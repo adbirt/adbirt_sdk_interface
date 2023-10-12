@@ -1,6 +1,6 @@
 name: adbirt_sdk_interface
 description: Flutter SDK for adbirt
-version: 0.0.1
+version: 0.0.2
 homepage: https://adbirt.com/flutter_sdk
 
 environment:
@@ -25,10 +25,10 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-  plugin:
-    platforms:
-      ios: any
-      android: any
+  # plugin:
+  #   platforms:
+  #     ios: any
+  #     android: any
 
   # To add assets to your package, add an assets section, like this:
   # assets:

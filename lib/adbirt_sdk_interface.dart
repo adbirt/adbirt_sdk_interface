@@ -119,10 +119,10 @@ abstract class AdbirtADKInterface {
       Uri.parse(AdbirtADKInterface.apiURL),
       headers: <String, String>{
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Authorization': 'Bearer $adbirtApiToken',
       },
       body: encodedPayload,
     );
-    // TODO: implement this
   }
 
   //

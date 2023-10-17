@@ -53,6 +53,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize your app with the Adbirt API token
+  // This must be done first for other methods like `logEvent` to work
   await AdbirtADKInterface.initializeApp('your_api_token');
   
   runApp(MyApp());
@@ -62,6 +63,7 @@ void main() async {
 - Event/Transaction tracking
 ```dart
 // Log a custom event with event name and parameters
+// For Apex network, the event name must be "apex:transaction"
 AdbirtADKInterface.logEvent('apex:transaction', {
   'user_id': '12345', 
   'type': 'cash withdrawal' // can be anything

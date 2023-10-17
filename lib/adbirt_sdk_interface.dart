@@ -106,6 +106,7 @@ abstract class AdbirtADKInterface {
     SharedPreferences sharedPrefs = await SharedPreferences.getInstance();
 
     String? adbirtApiToken = sharedPrefs.getString('adbirt_api_token');
+    bool? isAdbirt = sharedPrefs.getBool('is_adbirt');
 
     if (adbirtApiToken == null || adbirtApiToken.isEmpty) {
       debugPrint('Adbirt API token not set!!!');
@@ -118,14 +119,16 @@ abstract class AdbirtADKInterface {
 
     String encodedPayload = Uri.encodeQueryComponent(jsonParameters);
 
-    await http.post(
-      Uri.parse(AdbirtADKInterface.apiURL),
-      headers: <String, String>{
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Authorization': 'Bearer $adbirtApiToken',
-      },
-      body: encodedPayload,
-    );
+    if (isAdbirt != null && isAdbirt == true) {
+      await http.post(
+        Uri.parse(AdbirtADKInterface.apiURL),
+        headers: <String, String>{
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Authorization': 'Bearer $adbirtApiToken',
+        },
+        body: encodedPayload,
+      );
+    }
   }
 
   //

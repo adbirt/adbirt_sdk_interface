@@ -1,6 +1,6 @@
 name: adbirt_sdk_interface
 description: Flutter SDK for adbirt
-version: 0.0.4
+version: 0.0.5
 homepage: https://adbirt.com/flutter_sdk
 
 environment:

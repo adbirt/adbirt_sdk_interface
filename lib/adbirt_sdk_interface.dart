@@ -23,9 +23,9 @@ abstract class AdbirtADKInterface {
       var installReferrerInfo =
           await AdbirtADKInterface._getReferrerDetailsAndroid();
 
-      var existingUtmource = sharedPrefs.getString('utmsource');
+      var existingUtmource = sharedPrefs.getString('utmsource') ?? '';
 
-      if (existingUtmource == null || existingUtmource.isEmpty) {
+      if (existingUtmource.isEmpty) {
         if (installReferrerInfo != null) {
           var utmSource = installReferrerInfo['utmSource'];
           var utmMedium = installReferrerInfo['utmMedium'];
@@ -38,13 +38,31 @@ abstract class AdbirtADKInterface {
           }
         }
       }
+
+      var isAdbirt = sharedPrefs.getBool('is_adbirt') ?? false;
+      var adbirtApiToken = sharedPrefs.getString('adbirt_api_token') ?? '';
+      var adbirtIdentifyer = sharedPrefs.getString('adbirt_identifier') ?? '';
+
+      // record app install
+      if (isAdbirt) {
+        if (adbirtApiToken.isNotEmpty) {
+          if (adbirtIdentifyer.isNotEmpty) {
+            AdbirtADKInterface.logEvent('app_install:$adbirtApiToken', {});
+            AdbirtADKInterface.logEvent(
+                'android_app_install:$adbirtApiToken', {});
+          }
+        }
+      }
+
+      // end android
     } else if (Platform.isIOS) {
+      // TODO: implement iOS
       await AdbirtADKInterface._getReferrerDetailsIOS();
     }
 
-    var adbirtIdentifier = sharedPrefs.getString('adbirt_identifier');
+    var adbirtIdentifier = sharedPrefs.getString('adbirt_identifier') ?? '';
 
-    if (adbirtIdentifier == null || adbirtIdentifier.isEmpty) {
+    if (adbirtIdentifier.isEmpty) {
       adbirtIdentifier = AdbirtADKInterface._geterateUniqueIdentifyer();
 
       await sharedPrefs.setString('adbirt_identifier', adbirtIdentifier);
@@ -91,7 +109,7 @@ abstract class AdbirtADKInterface {
         await AppTrackingTransparency.requestTrackingAuthorization();
       }
 
-      //
+      // TODO: implement logic
     } catch (e) {
       debugPrint('Failed to get referrer details: $e');
     }
@@ -105,21 +123,26 @@ abstract class AdbirtADKInterface {
   ) async {
     SharedPreferences sharedPrefs = await SharedPreferences.getInstance();
 
-    String? adbirtApiToken = sharedPrefs.getString('adbirt_api_token');
-    bool? isAdbirt = sharedPrefs.getBool('is_adbirt');
+    var adbirtApiToken = sharedPrefs.getString('adbirt_api_token') ?? '';
+    var isAdbirt = sharedPrefs.getBool('is_adbirt') ?? false;
+    var adbirtIdentifyer = sharedPrefs.getString('adbirt_identifier') ?? '';
 
-    if (adbirtApiToken == null || adbirtApiToken.isEmpty) {
+    if (adbirtApiToken.isEmpty) {
       debugPrint('Adbirt API token not set!!!');
+      assert(adbirtApiToken.isNotEmpty);
     }
 
     String jsonParameters = jsonEncode({
       'event_name': eventName,
-      'fields': jsonEncode(parameters),
+      'fields': jsonEncode({
+        ...parameters,
+        'adbirt_identifier': adbirtIdentifyer,
+      }),
     });
 
     String encodedPayload = Uri.encodeQueryComponent(jsonParameters);
 
-    if (isAdbirt != null && isAdbirt == true) {
+    if (isAdbirt == true) {
       await http.post(
         Uri.parse(AdbirtADKInterface.apiURL),
         headers: <String, String>{

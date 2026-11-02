@@ -1,8 +1,6 @@
 library adbirt_sdk_interface;
 
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:android_play_install_referrer/android_play_install_referrer.dart';
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
@@ -11,9 +9,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/attribution.dart';
+import 'src/client.dart';
 
 export 'src/attribution.dart'
     show AdbirtConfig, AdbirtAttribution, parseInstallReferrer, kDefaultAttributedSource;
+export 'src/client.dart' show AdbirtClient, AdbirtEvents, AdbirtStorage, AdbirtTransport;
 
 /// Adbirt SDK.
 ///
@@ -22,29 +22,21 @@ export 'src/attribution.dart'
 /// and conversion attribution reaches Adbirt through that MMP's server-to-server
 /// postback and this SDK is not part of the integration.
 ///
-/// ## What changed from 0.0.6
+/// Events go to `POST {baseUrl}/api/v1/events` with the campaign's
+/// publishable token (`adb_pk_...`). The secret token (`adb_sk_...`) belongs
+/// on the advertiser's server and must never be put in an app.
 ///
-/// 0.0.6 could not attribute an install or send any event. `_getReferrerDetails`
-/// returned a map keyed `utm_source`/`utm_medium` while the caller read
-/// `utmSource`/`utmMedium`, so both were always null, the `is_adbirt` flag was
-/// never set, and every send was gated on that flag. A second, independent bug
-/// gated the install event on an identifier that was generated afterwards.
-/// Both are fixed and covered by tests in `test/attribution_test.dart`.
+/// Events that cannot be delivered are queued on the device and retried with
+/// backoff, on the next event, on the next launch and on [flush].
 abstract class AdbirtADKInterface {
-  static AdbirtConfig? _config;
+  static AdbirtClient? _client;
 
-  static const _kApiToken = 'adbirt_api_token';
-  static const _kIdentifier = 'adbirt_identifier';
-  static const _kAttributed = 'is_adbirt';
-  static const _kSource = 'utm_source';
-  static const _kMedium = 'utm_medium';
-  static const _kClickId = 'adb_clickid';
   static const _kReferrerRead = 'adbirt_referrer_read';
 
   /// Initialize the SDK.
   ///
   /// Backwards compatible with `initializeApp('token')`. Pass [config] instead
-  /// to point the SDK at a specific deployment or to attribute a source other
+  /// to point the SDK at another deployment or to attribute a source other
   /// than `adbirt`.
   static Future<void> initializeApp(
     String apiToken, {
@@ -52,61 +44,44 @@ abstract class AdbirtADKInterface {
   }) async {
     final resolved = config ?? AdbirtConfig(apiToken: apiToken);
     resolved.validate();
-    _config = resolved;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kApiToken, resolved.apiToken);
+    final client = AdbirtClient(
+      config: resolved,
+      storage: _SharedPreferencesStorage(prefs),
+      transport: _httpTransport,
+    );
+    _client = client;
 
-    // Generate the device identifier FIRST. In 0.0.6 this ran after the install
-    // event, and the install event required a non-empty identifier - so on the
-    // one launch where an install matters, it was always empty.
-    var identifier = prefs.getString(_kIdentifier);
-    if (identifier == null || identifier.isEmpty) {
-      identifier = _generateIdentifier();
-      await prefs.setString(_kIdentifier, identifier);
-    }
+    // The identifier exists before the install event that carries it.
+    await client.identifier();
 
-    if (Platform.isAndroid) {
-      await _readAndroidReferrer(prefs, resolved);
+    final alreadyRead = prefs.getBool(_kReferrerRead) ?? false;
+
+    if (Platform.isAndroid && !alreadyRead) {
+      await _readAndroidReferrer(client, resolved);
     } else if (Platform.isIOS) {
       await _requestIosTrackingAuthorization();
     }
 
-    final attributed = prefs.getBool(_kAttributed) ?? false;
-    final alreadyReported = prefs.getBool(_kReferrerRead) ?? false;
-
-    if (attributed && !alreadyReported) {
-      await logEvent('app_install', {
+    if (!alreadyRead) {
+      await prefs.setBool(_kReferrerRead, true);
+      await client.logEvent(AdbirtEvents.install, parameters: {
         'platform': Platform.isAndroid ? 'android' : 'ios',
       });
-      await prefs.setBool(_kReferrerRead, true);
     }
+
+    await client.flush();
   }
 
   /// Read the Play install referrer once and store what it said.
-  static Future<void> _readAndroidReferrer(
-    SharedPreferences prefs,
-    AdbirtConfig config,
-  ) async {
-    if (prefs.getBool(_kReferrerRead) == true) return;
-
+  static Future<void> _readAndroidReferrer(AdbirtClient client, AdbirtConfig config) async {
     try {
       final details = await AndroidPlayInstallReferrer.installReferrer;
-      final attribution = parseInstallReferrer(
+      await client.recordAttribution(parseInstallReferrer(
         details.installReferrer,
         attributedSources: config.attributedSources,
-      );
-
-      if (attribution.source != null) {
-        await prefs.setString(_kSource, attribution.source!);
-      }
-      if (attribution.medium != null) {
-        await prefs.setString(_kMedium, attribution.medium!);
-      }
-      if (attribution.clickId != null) {
-        await prefs.setString(_kClickId, attribution.clickId!);
-      }
-      await prefs.setBool(_kAttributed, attribution.isAdbirt);
+      ));
     } catch (e) {
       // An install referrer is unavailable on non-Play installs and on some
       // devices. That is normal and must not break the host app's startup.
@@ -116,9 +91,9 @@ abstract class AdbirtADKInterface {
 
   /// iOS has no install-referrer equivalent.
   ///
-  /// Attribution on iOS requires either SKAdNetwork or an MMP. This method
-  /// requests ATT so a host app that wants IDFA can, and does nothing else.
-  /// It is not iOS attribution and must not be described as such.
+  /// Attribution on iOS needs a click id delivered another way (a deep link
+  /// carrying `adb_clickid`, passed to [setClickId]), SKAdNetwork or an MMP.
+  /// This only requests ATT so a host app that wants IDFA can.
   static Future<void> _requestIosTrackingAuthorization() async {
     try {
       final status = await AppTrackingTransparency.trackingAuthorizationStatus;
@@ -130,65 +105,88 @@ abstract class AdbirtADKInterface {
     }
   }
 
-  /// Log an event.
-  ///
-  /// Returns true when the event was accepted by the server. 0.0.6 returned
-  /// void and swallowed the response, so an integrator had no way to know
-  /// whether anything worked - and nothing did.
-  static Future<bool> logEvent(
-    String eventName,
-    Map<String, dynamic> parameters,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final config = _config ??
-        AdbirtConfig(apiToken: prefs.getString(_kApiToken) ?? '');
-
-    if (config.apiToken.isEmpty) {
-      debugPrint('Adbirt: not initialized - call initializeApp first');
-      return false;
-    }
-
-    // Only report events for installs this SDK is configured to attribute.
-    if (!(prefs.getBool(_kAttributed) ?? false)) return false;
-
-    try {
-      final response = await http.post(
-        Uri.parse(config.eventEndpoint),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${config.apiToken}',
-        },
-        body: jsonEncode({
-          'event_name': eventName,
-          'adbirt_identifier': prefs.getString(_kIdentifier),
-          'adb_clickid': prefs.getString(_kClickId),
-          'utm_source': prefs.getString(_kSource),
-          'utm_medium': prefs.getString(_kMedium),
-          'parameters': parameters,
-        }),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) return true;
-
-      debugPrint('Adbirt: event rejected (${response.statusCode})');
-      return false;
-    } catch (e) {
-      debugPrint('Adbirt: event send failed ($e)');
-      return false;
-    }
+  static AdbirtClient? _ready() {
+    final client = _client;
+    if (client == null) debugPrint('Adbirt: not initialized - call initializeApp first');
+    return client;
   }
+
+  /// Log an event with any name.
+  ///
+  /// Returns true when the server accepted it now; false when it was queued
+  /// for retry or not sent (install not attributed to Adbirt). Configure the
+  /// name as a payable event on the campaign to be billed for it.
+  static Future<bool> logEvent(
+    String eventName, [
+    Map<String, dynamic> parameters = const {},
+  ]) async {
+    final client = _ready();
+    if (client == null) return false;
+    return client.logEvent(
+      eventName,
+      parameters: parameters,
+      value: _amount(parameters['value']),
+      currency: parameters['currency']?.toString(),
+    );
+  }
+
+  /// Log an event with a value, e.g. `logValueEvent('subscribe', value: 4.99, currency: 'USD')`.
+  static Future<bool> logValueEvent(
+    String eventName, {
+    num? value,
+    String? currency,
+    Map<String, dynamic> parameters = const {},
+  }) async =>
+      await _ready()?.logEvent(eventName, value: value, currency: currency, parameters: parameters) ?? false;
+
+  static Future<bool> logRegistration({Map<String, dynamic> parameters = const {}}) async =>
+      await _ready()?.logRegistration(parameters: parameters) ?? false;
+
+  static Future<bool> logDeposit(num value, String currency, {Map<String, dynamic> parameters = const {}}) async =>
+      await _ready()?.logDeposit(value, currency, parameters: parameters) ?? false;
+
+  static Future<bool> logPurchase(num value, String currency, {Map<String, dynamic> parameters = const {}}) async =>
+      await _ready()?.logPurchase(value, currency, parameters: parameters) ?? false;
+
+  /// Attribute this install to a click id from a deep link (`adb_clickid`).
+  static Future<void> setClickId(String clickId) async => _ready()?.setClickId(clickId);
+
+  /// Retry queued events now, e.g. when connectivity returns.
+  static Future<int> flush() async => await _ready()?.flush() ?? 0;
 
   /// The Adbirt click id for this install, when there is one.
   static Future<String?> clickId() async =>
-      (await SharedPreferences.getInstance()).getString(_kClickId);
+      (await SharedPreferences.getInstance()).getString(AdbirtClient.clickIdKey);
 
-  static String _generateIdentifier() {
-    const chars =
-        'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890';
-    final rnd = Random.secure();
-    final body = String.fromCharCodes(
-      Iterable.generate(20, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))),
-    );
-    return 'adbirt_id_$body';
+  static num? _amount(Object? raw) {
+    if (raw is num) return raw >= 0 && raw.isFinite ? raw : null;
+    if (raw is String) {
+      final parsed = num.tryParse(raw);
+      return parsed != null && parsed >= 0 && parsed.isFinite ? parsed : null;
+    }
+    return null;
   }
+}
+
+class _SharedPreferencesStorage implements AdbirtStorage {
+  _SharedPreferencesStorage(this.prefs);
+  final SharedPreferences prefs;
+
+  @override
+  Future<String?> getString(String key) async {
+    // Earlier versions stored the attribution flag as a bool.
+    final value = prefs.get(key);
+    return value?.toString();
+  }
+
+  @override
+  Future<void> setString(String key, String value) => prefs.setString(key, value);
+
+  @override
+  Future<void> remove(String key) => prefs.remove(key);
+}
+
+Future<int> _httpTransport(Uri url, Map<String, String> headers, String body) async {
+  final response = await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 15));
+  return response.statusCode;
 }

@@ -35,7 +35,7 @@ http: ^1.1.0
 Add the package to your pubspec.yaml file:
 ```yaml
 dependencies:
-  adbirt_sdk_interface: ^0.0.1
+  adbirt_sdk_interface: ^0.1.0
 ```
 
 Then run:
@@ -54,23 +54,61 @@ void main() async {
   
   // Initialize your app with the Adbirt API token
   // This must be done first for other methods like `logEvent` to work
-  await AdbirtADKInterface.initializeApp('your_api_token');
+  await AdbirtADKInterface.initializeApp('adb_pk_your_publishable_token');
   
   runApp(MyApp());
 }
 ```
 
-- Event/Transaction tracking
+- Events
+
+Any event name works. Ask Adbirt to set the names you want to pay for as
+payable events on your campaign (with a payout per event); other events are
+accepted but not billed.
+
 ```dart
-// Log a custom event with event name and parameters
-// For Apex network, the event name must be "apex:transaction"
-AdbirtADKInterface.logEvent('apex:transaction', {
-  'user_id': '12345', 
-  'type': 'cash withdrawal' // can be anything
-  'amount': '10,000',
-});
+// Registration, deposit and purchase helpers.
+await AdbirtADKInterface.logRegistration();
+await AdbirtADKInterface.logDeposit(5000, 'NGN');
+await AdbirtADKInterface.logPurchase(9.99, 'USD', parameters: {'sku': 'pro'});
+
+// Any other event, with an optional value.
+await AdbirtADKInterface.logValueEvent('subscribe', value: 4.99, currency: 'USD');
+await AdbirtADKInterface.logEvent('level_complete', {'level': 3});
 ```
 
+Each call returns `true` when the server accepted the event. Events that cannot
+be sent (offline, server busy) are kept on the device and retried later; call
+`AdbirtADKInterface.flush()` when connectivity returns to send them sooner.
+
+- Configuration
+
+```dart
+await AdbirtADKInterface.initializeApp(
+  'adb_pk_...',
+  config: const AdbirtConfig(
+    apiToken: 'adb_pk_...',
+    baseUrl: 'https://api.adbirt.com', // default
+  ),
+);
+```
+
+Use the **publishable** token (`adb_pk_...`). The secret token (`adb_sk_...`)
+is for your server only: it is the only one that can confirm a deposit as
+validated, so it must never ship in an app.
+
+- Attribution
+
+On Android the SDK reads the Google Play install referrer, which Adbirt's
+click-out fills with `adb_clickid`. iOS has no install referrer: if your app is
+opened from an Adbirt link carrying `adb_clickid`, pass it on:
+
+```dart
+await AdbirtADKInterface.setClickId(uri.queryParameters['adb_clickid']!);
+```
+
+Use this SDK only when you do not use an MMP. With AppsFlyer, Adjust, Branch or
+Singular, conversions reach Adbirt through the MMP's postback instead.
 
 ## Additional information
 For more Information, visit [https://adbirt.com/contact](https://adbirt.com/contact) for more information about the Adbirt platform.

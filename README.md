@@ -69,7 +69,9 @@ accepted but not billed.
 ```dart
 // Registration, deposit and purchase helpers.
 await AdbirtADKInterface.logRegistration();
-await AdbirtADKInterface.logDeposit(5000, 'NGN');
+await AdbirtADKInterface.logDeposit(5000, 'NGN', transactionId: 'dep-1029');
+// Events a campaign pays for every time (each transaction, each loan) need your own id:
+await AdbirtADKInterface.logValueEvent('transaction', value: 2500, currency: 'NGN', transactionId: 'tx-88412');
 await AdbirtADKInterface.logPurchase(9.99, 'USD', parameters: {'sku': 'pro'});
 
 // Any other event, with an optional value.

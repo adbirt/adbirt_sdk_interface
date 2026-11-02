@@ -105,11 +105,16 @@ class AdbirtClient {
   /// be delivered (offline, server error, rate limited) is queued and retried
   /// by later calls and by [flush]; it keeps its event id, so a retry is never
   /// counted twice. Nothing is sent for an install Adbirt did not bring.
+  ///
+  /// [transactionId] is your own id for this occurrence (an order, a
+  /// transaction, a loan). Send it for events a campaign pays for every time:
+  /// each distinct id is charged once, and the same id sent again is not.
   Future<bool> logEvent(
     String eventName, {
     Map<String, dynamic> parameters = const {},
     num? value,
     String? currency,
+    String? transactionId,
   }) async {
     if (eventName.trim().isEmpty) {
       throw ArgumentError.value(eventName, 'eventName', 'must not be empty');
@@ -123,6 +128,8 @@ class AdbirtClient {
     final event = <String, dynamic>{
       'event_name': eventName.trim(),
       'event_id': _eventId(),
+      if (transactionId != null && transactionId.trim().isNotEmpty)
+        'transaction_id': transactionId.trim(),
       if (value != null) 'value': value,
       if (currency != null && currency.trim().isNotEmpty)
         'currency': currency.trim().toUpperCase(),
@@ -140,11 +147,15 @@ class AdbirtClient {
   Future<bool> logRegistration({Map<String, dynamic> parameters = const {}}) =>
       logEvent(AdbirtEvents.registration, parameters: parameters);
 
-  Future<bool> logDeposit(num value, String currency, {Map<String, dynamic> parameters = const {}}) =>
-      logEvent(AdbirtEvents.deposit, value: value, currency: currency, parameters: parameters);
+  Future<bool> logDeposit(num value, String currency,
+          {Map<String, dynamic> parameters = const {}, String? transactionId}) =>
+      logEvent(AdbirtEvents.deposit,
+          value: value, currency: currency, parameters: parameters, transactionId: transactionId);
 
-  Future<bool> logPurchase(num value, String currency, {Map<String, dynamic> parameters = const {}}) =>
-      logEvent(AdbirtEvents.purchase, value: value, currency: currency, parameters: parameters);
+  Future<bool> logPurchase(num value, String currency,
+          {Map<String, dynamic> parameters = const {}, String? transactionId}) =>
+      logEvent(AdbirtEvents.purchase,
+          value: value, currency: currency, parameters: parameters, transactionId: transactionId);
 
   /// Events waiting for retry.
   Future<int> pendingCount() async => (await _readQueue()).length;
@@ -183,6 +194,7 @@ class AdbirtClient {
     final body = <String, dynamic>{
       'event_name': event['event_name'],
       'event_id': event['event_id'],
+      if (event['transaction_id'] != null) 'transaction_id': event['transaction_id'],
       'adbirt_identifier': await identifier(),
       'adb_clickid': await storage.getString(clickIdKey),
       'utm_source': await storage.getString(sourceKey),

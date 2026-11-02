@@ -1,3 +1,11 @@
+## 0.1.1
+
+* `transactionId` on `logEvent`, `logValueEvent`, `logDeposit` and `logPurchase`
+  (and `transaction_id` in the parameters of the static `logEvent`): your own id
+  for one occurrence. Campaigns can charge an event every time it happens (each
+  transaction, each loan); each distinct id is charged once. The SDK's own
+  `event_id` stays a retry key and is never used for that.
+
 ## 0.1.0
 
 * Events go to `POST {baseUrl}/api/v1/events`, which the Adbirt backend now

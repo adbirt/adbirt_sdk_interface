@@ -97,6 +97,28 @@ void main() {
       expect(body['event_id'], matches(RegExp(r'^[a-f0-9]{32}$')));
     });
 
+    test('sends the advertiser transaction id for repeatable events, and none when not given', () async {
+      final client = await attributedClient();
+      await client.logEvent('transaction', value: 5000, currency: 'NGN', transactionId: ' tx-42 ');
+      await client.logDeposit(100, 'NGN', transactionId: 'dep-1');
+      await client.logPurchase(100, 'NGN', transactionId: 'order-1');
+      await client.logEvent('registration');
+
+      expect(transport.requests[0].body['transaction_id'], 'tx-42');
+      expect(transport.requests[1].body['transaction_id'], 'dep-1');
+      expect(transport.requests[2].body['transaction_id'], 'order-1');
+      expect(transport.requests[3].body.containsKey('transaction_id'), isFalse);
+    });
+
+    test('keeps the transaction id on a queued retry', () async {
+      final client = await attributedClient();
+      transport.answers.add(Exception('offline'));
+      await client.logEvent('loan_granted', transactionId: 'loan-7');
+      clock = clock.add(const Duration(minutes: 5));
+      await client.flush();
+      expect(transport.requests[1].body['transaction_id'], 'loan-7');
+    });
+
     test('does not send when the install was not attributed to Adbirt', () async {
       final client = buildClient();
       await client.recordAttribution(parseInstallReferrer('utm_source=google-play'));

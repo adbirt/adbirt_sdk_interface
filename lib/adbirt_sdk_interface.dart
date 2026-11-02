@@ -127,6 +127,7 @@ abstract class AdbirtADKInterface {
       parameters: parameters,
       value: _amount(parameters['value']),
       currency: parameters['currency']?.toString(),
+      transactionId: parameters['transaction_id']?.toString(),
     );
   }
 
@@ -136,17 +137,22 @@ abstract class AdbirtADKInterface {
     num? value,
     String? currency,
     Map<String, dynamic> parameters = const {},
+    String? transactionId,
   }) async =>
-      await _ready()?.logEvent(eventName, value: value, currency: currency, parameters: parameters) ?? false;
+      await _ready()?.logEvent(eventName,
+          value: value, currency: currency, parameters: parameters, transactionId: transactionId) ??
+      false;
 
   static Future<bool> logRegistration({Map<String, dynamic> parameters = const {}}) async =>
       await _ready()?.logRegistration(parameters: parameters) ?? false;
 
-  static Future<bool> logDeposit(num value, String currency, {Map<String, dynamic> parameters = const {}}) async =>
-      await _ready()?.logDeposit(value, currency, parameters: parameters) ?? false;
+  static Future<bool> logDeposit(num value, String currency,
+          {Map<String, dynamic> parameters = const {}, String? transactionId}) async =>
+      await _ready()?.logDeposit(value, currency, parameters: parameters, transactionId: transactionId) ?? false;
 
-  static Future<bool> logPurchase(num value, String currency, {Map<String, dynamic> parameters = const {}}) async =>
-      await _ready()?.logPurchase(value, currency, parameters: parameters) ?? false;
+  static Future<bool> logPurchase(num value, String currency,
+          {Map<String, dynamic> parameters = const {}, String? transactionId}) async =>
+      await _ready()?.logPurchase(value, currency, parameters: parameters, transactionId: transactionId) ?? false;
 
   /// Attribute this install to a click id from a deep link (`adb_clickid`).
   static Future<void> setClickId(String clickId) async => _ready()?.setClickId(clickId);

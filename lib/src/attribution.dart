@@ -108,6 +108,8 @@ class AdbirtConfig {
     required this.apiToken,
     this.baseUrl = defaultBaseUrl,
     this.attributedSources = const {kDefaultAttributedSource},
+    this.maxQueueSize = 100,
+    this.maxAttempts = 10,
   });
 
   static const String defaultBaseUrl = 'https://api.adbirt.com';
@@ -119,7 +121,14 @@ class AdbirtConfig {
   /// serve many networks rather than only Adbirt's own campaigns.
   final Set<String> attributedSources;
 
-  String get eventEndpoint => '$baseUrl/api/v1/events';
+  /// Events kept for retry while offline. The oldest are dropped beyond this.
+  final int maxQueueSize;
+
+  /// Delivery attempts per event before it is given up.
+  final int maxAttempts;
+
+  String get eventEndpoint =>
+      '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1/events';
 
   /// Fail loudly at initialization rather than silently dropping every event.
   /// Version 0.0.6 used `assert`, which is a no-op in release builds, so a
